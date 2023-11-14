@@ -1,0 +1,58 @@
+version: '3' 
+
+services:
+
+  zookeeper:
+    image: arm64v8/zookeeper:latest
+    ports:
+      - "2181:2181"
+    networks:
+      - my_network
+
+  kafka:
+    image: wurstmeister/kafka:latest
+    env_file:
+      - ./.env
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    networks:
+      - my_network
+
+  postgres:
+    image: postgres:13.0-alpine
+    env_file:
+      - ./.env
+    depends_on:
+      - kafka
+    networks:
+      - my_network
+
+  api_gateway_service:
+    build:
+      context: ../api_gateway_service
+    ports:
+      - "8000:8000"   
+    env_file:
+      - ../api_gateway_service/.env
+    depends_on:
+      - postgres
+    networks:
+      - my_network
+    restart: always   
+
+  database-service:
+    build:
+      context: ../database-service
+    env_file:
+      - ../database-service/.env
+    depends_on:
+      - api_gateway_service
+    networks:
+      - my_network
+    restart: always   
+    # command: bash -c "sleep 30 && python main.py"
+
+networks:
+  my_network:
