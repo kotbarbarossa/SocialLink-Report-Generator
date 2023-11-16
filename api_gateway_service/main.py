@@ -2,6 +2,7 @@ from typing import Union
 from fastapi import FastAPI
 from pydantic import BaseModel, Field, validator
 from aiokafka import AIOKafkaProducer
+import logging
 import uvicorn
 import json
 
@@ -46,6 +47,7 @@ async def get_user_info(request: PostUserRequest) -> Union[dict, str]:
     producer = await start_producer()
     await send_message_to_kafka(producer, TOPIC[social_network], username)
     await stop_producer(producer)
+    logger.info(f'Отправлено сообщение {username}.')
 
     return {'message': f'{social_network} - {username} added.'}
 
@@ -68,5 +70,13 @@ async def stop_producer(producer):
 
 
 if __name__ == '__main__':
+
+    logger = logging.getLogger('api_gateway_service')
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler = logging.FileHandler('api_gateway_service.log')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)    
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -42,13 +42,24 @@ services:
       - my_network
     restart: always   
 
-  database-service:
+  vk_api_service:
     build:
-      context: ../database-service
+      context: ../vk_api_service
     env_file:
-      - ../database-service/.env
+      - ../vk_api_service/.env
     depends_on:
       - api_gateway_service
+    networks:
+      - my_network
+    restart: always
+
+  database_service:
+    build:
+      context: ../database_service
+    env_file:
+      - ../database_service/.env
+    depends_on:
+      - vk_api_service
     networks:
       - my_network
     restart: always   
