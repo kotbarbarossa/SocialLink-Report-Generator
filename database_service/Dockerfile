@@ -9,4 +9,7 @@ COPY requirements.txt /app
 RUN pip3 install -r /app/requirements.txt --no-cache-dir
 COPY . /app
 WORKDIR /app
+
+# RUN alembic upgrade head
+
 CMD ["python3", "main.py"]
