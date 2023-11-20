@@ -73,8 +73,7 @@ services:
       - vk_api_service
     networks:
       - my_network
-    restart: always   
-    # command: bash -c "sleep 30 && python main.py"
+    restart: always
 
 networks:
   my_network:

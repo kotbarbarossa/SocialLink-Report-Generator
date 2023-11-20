@@ -8,6 +8,10 @@ Base = declarative_base(metadata=metadata)
 
 
 class User(Base):
+    """
+    Модель пользователя.
+    Таблица БД: users
+    """
     __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True, index=True)
@@ -34,6 +38,10 @@ user_friends = Table(
 
 
 class VKUser(Base):
+    """
+    Модель пользователя VK.
+    Таблица БД: vk_users
+    """
     __tablename__ = 'vk_users'
 
     id = Column(Integer, primary_key=True, index=True)
@@ -59,6 +67,10 @@ user_groups = Table(
 
 
 class VKGroup(Base):
+    """
+    Модель группы VK.
+    Таблица БД: vk_groups
+    """
     __tablename__ = 'vk_groups'
 
     id = Column(Integer, primary_key=True, index=True)

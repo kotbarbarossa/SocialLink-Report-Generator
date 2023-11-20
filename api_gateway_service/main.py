@@ -31,7 +31,7 @@ class PostUserRequest(BaseModel):
     username: str = Field(max_length=250)    
 
     @validator('social_network')
-    def validate_social_network(cls, v):
+    def validate_social_network(cls, v: str) -> str:
         allowed_social_networks = {'vk', 'telegram', 'instagram'}
         if v.lower() not in allowed_social_networks:
             raise ValueError('Invalid social network')
@@ -41,10 +41,10 @@ class PostUserRequest(BaseModel):
 @app.post('/post_user/{social_network}/{username}/', tags=['post_user'])
 async def get_user_info(request: PostUserRequest) -> Union[dict, str]:
     """Функция добавления информации о пользователе."""
-    social_network = request.social_network
-    username = request.username
+    social_network: str = request.social_network
+    username: str = request.username
 
-    producer = await start_producer()
+    producer: AIOKafkaProducer = await start_producer()
     await send_message_to_kafka(producer, TOPIC[social_network], username)
     await stop_producer(producer)
     logger.info(f'Отправлено сообщение {username}.')
@@ -52,7 +52,10 @@ async def get_user_info(request: PostUserRequest) -> Union[dict, str]:
     return {'message': f'{social_network} - {username} added.'}
 
 
-async def start_producer():
+async def start_producer() -> AIOKafkaProducer:
+    """
+    Запускает Kafka Producer для отправки сообщений в Kafka.
+    """
     producer = AIOKafkaProducer(
         bootstrap_servers=kafka_bootstrap_servers,
         value_serializer=lambda v: json.dumps(v).encode('utf-8')
@@ -61,11 +64,27 @@ async def start_producer():
     return producer
 
 
-async def send_message_to_kafka(producer, topic: str, username: str):
+async def send_message_to_kafka(
+        producer: AIOKafkaProducer,
+        topic: str,
+        username: str) -> None:
+    """
+    Отправляет сообщение в Kafka.
+    Аргументы:
+    - producer: экземпляр Kafka Producer.
+    - topic: тема Kafka, в которую будет отправлено сообщение.
+    - action: действие для сообщения.
+    - data: данные сообщения.
+    """
     await producer.send(topic, value={"username": username})
 
 
-async def stop_producer(producer):
+async def stop_producer(producer: AIOKafkaProducer) -> None:
+    """
+    Останавливает Kafka Producer.
+    Аргументы:
+    - producer: экземпляр Kafka Producer.
+    """
     await producer.stop()
 
 

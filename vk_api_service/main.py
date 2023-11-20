@@ -8,7 +8,14 @@ from config import (kafka_bootstrap_servers, kafka_topic_consumer,
                     group_id, vk_token, kafka_topic_producer)
 
 
-async def process_message(message):
+async def process_message(message: Any) -> None:
+    """
+    Обрабатывает полученное сообщение из Apache Kafka.
+    Аргументы:
+    - message: сообщение из Kafka.
+    Преобразует данные из сообщения в формат JSON
+    и обрабатывает данные, отправляя сообщения в Kafka.
+    """
     data = json.loads(message.value)
     username = data.get('username')
     logger.info(f'Получены данные {message}.')
@@ -23,7 +30,7 @@ async def process_message(message):
             logging.error('В user ID содержится недопустимое значение.')
             return
 
-        user_id = user.get('id')  # Обработка случая, когда user - None
+        user_id = user.get('id')
         if user_id is None:
             logging.error('ID пользователя не найден.')
             return
@@ -39,9 +46,9 @@ async def process_message(message):
 
         all_users = friends_ids + [user_id]
         logger.info(
-            'Создан список друзей пользователей '
-            '+ сам пользователь: %s.', all_users
-            )
+            f'Создан список друзей пользователей '
+            f'+ сам пользователь: {all_users}.'
+        )
 
         producer = await start_producer()
 
@@ -78,7 +85,12 @@ async def process_message(message):
 
 
 async def get_response(url: str) -> Union[dict, Any]:
-    """Получение ответа от стороннего API."""
+    """
+    Получает ответ от стороннего API.
+    Аргументы:
+    - url: URL для запроса.
+    Возвращает ответ в формате JSON или None при ошибке запроса.
+    """
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(url)
@@ -86,14 +98,21 @@ async def get_response(url: str) -> Union[dict, Any]:
 
             return response.json()
     except httpx.RequestError as e:
-        logging.error('Ошибка при выполнении HTTP-запроса: %s', e)
+        logging.error(f'Ошибка при выполнении HTTP-запроса: {e}')
         return None
     except httpx.HTTPStatusError as e:
-        logging.error('Ошибка HTTP-статуса: %s', e)
+        logging.error(f'Ошибка HTTP-статуса: {e}')
         return None
 
 
-async def get_user_id(username):
+async def get_user_id(username: str) -> Union[str, None]:
+    """
+    Получает идентификатор пользователя
+    по его имени пользователя в социальной сети.
+    Аргументы:
+    - username: имя пользователя в социальной сети.
+    Возвращает идентификатор пользователя или None при ошибке запроса.
+    """
     try:
         url = ('https://api.vk.com/method/'
                f'users.get?user_ids={username}&'
@@ -102,11 +121,18 @@ async def get_user_id(username):
         response = await get_response(url=url)
         return response['response'][0]
     except Exception as e:
-        logging.error('Ошибка получения user ID: %s', e)
+        logging.error(f'Ошибка получения user ID: {e}')
         return None
 
 
-async def get_user_friends(user_id):
+async def get_user_friends(user_id: str) -> Union[list, None]:
+    """
+    Получает список друзей пользователя
+    по его идентификатору в социальной сети.
+    Аргументы:
+    - user_id: идентификатор пользователя в социальной сети.
+    Возвращает список друзей пользователя или None при ошибке запроса.
+    """
     try:
         url = ('https://api.vk.com/method/'
                f'friends.get?user_id={user_id}&'
@@ -115,11 +141,18 @@ async def get_user_friends(user_id):
         response = await get_response(url=url)
         return response['response']['items']
     except Exception as e:
-        logging.error('Ошибка получения user friends: %s', e)
+        logging.error(f'Ошибка получения user friends: {e}')
         return None
 
 
-async def get_user_groups(user_id):
+async def get_user_groups(user_id: str) -> Union[dict, None]:
+    """
+    Получает группы пользователя
+    по его идентификатору в социальной сети.
+    Аргументы:
+    - user_id: идентификатор пользователя в социальной сети.
+    Возвращает список групп пользователя или None при ошибке запроса.
+    """
     try:
         url = ('https://api.vk.com/method/'
                f'groups.get?user_id={user_id}&'
@@ -128,11 +161,16 @@ async def get_user_groups(user_id):
                f'access_token={vk_token}')
         return await get_response(url=url)
     except Exception as e:
-        logging.error('Ошибка получения user groups: %s', e)
+        logging.error(f'Ошибка получения user groups: {e}')
         return None
 
 
-async def consume():
+async def consume() -> None:
+    """
+    Читает сообщения из Apache Kafka и обрабатывает их.
+    Запускает асинхронный процесс чтения сообщений из Kafka
+    и вызова функции process_message для обработки полученных данных.
+    """
     try:
         consumer = AIOKafkaConsumer(
             kafka_topic_consumer,
@@ -154,7 +192,10 @@ async def consume():
         await consumer.stop()
 
 
-async def start_producer():
+async def start_producer() -> AIOKafkaProducer:
+    """
+    Запускает Kafka Producer для отправки сообщений в Kafka.
+    """
     producer = AIOKafkaProducer(
         bootstrap_servers=kafka_bootstrap_servers,
         value_serializer=lambda v: json.dumps(v).encode('utf-8')
@@ -163,11 +204,28 @@ async def start_producer():
     return producer
 
 
-async def send_message_to_kafka(producer, topic: str, action: str, data: str):
+async def send_message_to_kafka(
+        producer: AIOKafkaProducer,
+        topic: str,
+        action: str,
+        data: str) -> None:
+    """
+    Отправляет сообщение в Kafka.
+    Аргументы:
+    - producer: экземпляр Kafka Producer.
+    - topic: тема Kafka, в которую будет отправлено сообщение.
+    - action: действие для сообщения.
+    - data: данные сообщения.
+    """
     await producer.send(topic, value={"action": action, "data": data})
 
 
-async def stop_producer(producer):
+async def stop_producer(producer: AIOKafkaProducer) -> None:
+    """
+    Останавливает Kafka Producer.
+    Аргументы:
+    - producer: экземпляр Kafka Producer.
+    """
     await producer.stop()
 
 

@@ -2,6 +2,7 @@ from aiokafka import AIOKafkaConsumer
 import json
 import asyncio
 import logging
+from typing import Any, Dict, List
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
@@ -11,14 +12,28 @@ from config import (kafka_bootstrap_servers, kafka_topic_consumer,
                     group_id)
 
 
-async def process_message(message):
+async def process_message(message: Any) -> None:
+    """
+    Обрабатывает полученное сообщение из Apache Kafka.
+    Аргументы:
+    - message: сообщение из Kafka.
+    Преобразует данные из сообщения в формат JSON,
+    и вызывает функцию write_pdf с этими данными.
+    """
     json_data = json.loads(message.value)
     data = json_data['data']
     logger.info(f'\nПолучены данные {message}.')
     await write_pdf(data)
 
 
-async def write_pdf(data):
+async def write_pdf(data: Dict[str, Any]) -> None:
+    """
+    Создает PDF-файл на основе полученных данных.
+    Аргументы:
+    - data: данные из Kafka.
+    Готовит и форматирует данные для создания PDF-файла,
+    содержащего информацию о пользователе из Kafka.
+    """
     username = data.get('username')
 
     logger.info(
@@ -34,10 +49,12 @@ async def write_pdf(data):
 
     styles = getSampleStyleSheet()
 
-    pdfmetrics.registerFont(TTFont('CascadiaCode', '/usr/share/fonts/truetype/CascadiaCode/ttf/CascadiaCode.ttf'))
+    pdfmetrics.registerFont(
+        TTFont('CascadiaCode',
+               '/usr/share/fonts/truetype/CascadiaCode/ttf/CascadiaCode.ttf'))
     styles['Normal'].fontName = 'CascadiaCode'
 
-    flowables = []
+    flowables: List = []
 
     for key, value in data.items():
         logger.info(f'key = {key}')
@@ -59,7 +76,7 @@ async def write_pdf(data):
             p = Paragraph(
                 f'Общее количество друзей: {len(value)}',
                 styles['Normal'])
-            flowables.append(p)                
+            flowables.append(p)
             text = (f'{key.capitalize()}: '
                     f'{", ".join(str(item["id"]) for item in value)}')
             p = Paragraph(text, styles['Normal'])
@@ -72,7 +89,12 @@ async def write_pdf(data):
     logger.info(f'Файл {pdf_filename} сохранен.')
 
 
-async def consume():
+async def consume() -> None:
+    """
+    Читает сообщения из Apache Kafka и обрабатывает их.
+    Запускает асинхронный процесс чтения сообщений из Kafka
+    и вызова функции process_message для обработки полученных данных.
+    """
     try:
         consumer = AIOKafkaConsumer(
             kafka_topic_consumer,

@@ -1,16 +1,25 @@
 import asyncio
 import json
 import logging
+from typing import Dict, Any, List, Tuple, Optional
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 from sqlalchemy.future import select
-from config import (kafka_bootstrap_servers, kafka_topic,
+from config import (kafka_bootstrap_servers, kafka_topic_consumer,
                     kafka_topic_producer, group_id)
 from models import User, VKUser, VKGroup, user_groups, user_friends
 from database import async_session
 from sqlalchemy.orm import selectinload
 
 
-async def process_message(message):
+async def process_message(message: Any) -> None:
+    """
+    Обрабатывает полученное сообщение из Apache Kafka.
+    Аргументы:
+    - message: сообщение из Kafka.
+    Допустимые действия:
+    - 'user_groups': обрабатывает данные о группах пользователя.
+    - 'user_friends': обрабатывает данные о друзьях пользователя.
+    """
     data = json.loads(message.value)
     logger.info(f'Получены данные {message}.')
     logger.info(f'Преобразованы в {data}.')
@@ -26,10 +35,15 @@ async def process_message(message):
         await get_user_info(payload)
 
     else:
-        logger.warning('Неизвестное действие: %s', action)
+        logger.warning(f'Неизвестное действие: {action}')
 
 
-async def handle_user_groups(data):
+async def handle_user_groups(data: Dict[str, Any]) -> None:
+    """
+    Обрабатывает данные о группах пользователя.
+    Аргументы:
+    - data: данные о группах пользователя в формате JSON.
+    """
     user_id = data.get('user')
     groups = data.get('groups', [])
 
@@ -39,7 +53,12 @@ async def handle_user_groups(data):
         await process_group(user, group_data)
 
 
-async def handle_user_friends(data):
+async def handle_user_friends(data: Dict[str, List[int]]) -> None:
+    """
+    Обрабатывает данные о друзьях пользователя.
+    Аргументы:
+    - data: данные о друзьях пользователя в формате JSON.
+    """
     for user_id, friends in data.items():
         user, user_obj = await get_or_create_user_with_user_obj(int(user_id))
 
@@ -49,7 +68,14 @@ async def handle_user_friends(data):
     logger.info(f'Создание записи для {user_id} окончено.')
 
 
-async def get_or_create_user_with_user_obj(user_id):
+async def get_or_create_user_with_user_obj(
+        user_id: int) -> Tuple[Optional[VKUser], Optional[User]]:
+    """
+    Получает или создает пользователя VK и связанного с ним пользователя.
+    Аргументы:
+    - user_id: идентификатор пользователя VK.
+    Возвращает кортеж (пользователь VK, связанный пользователь).
+    """
     async with async_session() as session:
         user = await session.execute(
             select(VKUser).filter_by(vk_user_id=user_id))
@@ -73,7 +99,14 @@ async def get_or_create_user_with_user_obj(user_id):
     return user, user_obj
 
 
-async def get_or_create_user(user_id):
+async def get_or_create_user(user_id: int) -> Optional[VKUser]:
+    """
+    Получает пользователя VK по его идентификатору
+    или создает нового, если отсутствует.
+    Аргументы:
+    - user_id: идентификатор пользователя VK.
+    Возвращает объект пользователя VK.
+    """
     async with async_session() as session:
         user = await session.execute(
             select(VKUser).filter_by(vk_user_id=user_id))
@@ -87,7 +120,14 @@ async def get_or_create_user(user_id):
     return user
 
 
-async def process_group(user, group_data):
+async def process_group(
+        user: VKUser, group_data: Dict[str, Any]) -> None:
+    """
+    Обрабатывает данные о группе VK.
+    Аргументы:
+    - user: объект пользователя VK.
+    - group_data: данные о группе VK в формате JSON.
+    """
     group_id = group_data.get('id')
 
     async with async_session() as session:
@@ -109,7 +149,13 @@ async def process_group(user, group_data):
         await session.commit()
 
 
-async def create_user_relation(user, friend_user):
+async def create_user_relation(user: VKUser, friend_user: VKUser) -> None:
+    """
+    Создает связь между двумя пользователями VK.
+    Аргументы:
+    - user: объект пользователя VK.
+    - friend_user: объект другого пользователя VK.
+    """
     user_friend_data = {
         'vk_user_id': user.id,
         'friend_vk_user_id': friend_user.id}
@@ -121,7 +167,12 @@ async def create_user_relation(user, friend_user):
     return None
 
 
-async def get_user_info(data):
+async def get_user_info(data: Dict[str, Any]) -> None:
+    """
+    Получает информацию о пользователе VK и его друзьях и группах.
+    Аргументы:
+    - data: данные о пользователе VK в формате JSON.
+    """
     for user_id, friendz in data.items():
         logger.info(f'Подготовка данных для PDF {user_id}.')
         user_id = int(user_id)
@@ -173,9 +224,14 @@ async def get_user_info(data):
             logger.error(f'Ошибка сбора данных {e}.')
 
 
-async def consume():
+async def consume() -> None:
+    """
+    Читает сообщения из Apache Kafka и обрабатывает их.
+    Запускает асинхронный процесс чтения сообщений из Kafka
+    и вызова функции process_message для обработки полученных данных.
+    """
     consumer = AIOKafkaConsumer(
-        kafka_topic,
+        kafka_topic_consumer,
         bootstrap_servers=kafka_bootstrap_servers,
         group_id=group_id,
         enable_auto_commit=True,
@@ -190,7 +246,10 @@ async def consume():
         await consumer.stop()
 
 
-async def start_producer():
+async def start_producer() -> AIOKafkaProducer:
+    """
+    Запускает Kafka Producer для отправки сообщений в Kafka.
+    """
     producer = AIOKafkaProducer(
         bootstrap_servers=kafka_bootstrap_servers,
         value_serializer=lambda v: json.dumps(v).encode('utf-8')
@@ -199,11 +258,28 @@ async def start_producer():
     return producer
 
 
-async def send_message_to_kafka(producer, topic: str, action: str, data: str):
+async def send_message_to_kafka(
+        producer: AIOKafkaProducer,
+        topic: str,
+        action: str,
+        data: str) -> None:
+    """
+    Отправляет сообщение в Kafka.
+    Аргументы:
+    - producer: экземпляр Kafka Producer.
+    - topic: тема Kafka, в которую будет отправлено сообщение.
+    - action: действие для сообщения.
+    - data: данные сообщения.
+    """
     await producer.send(topic, value={"action": action, "data": data})
 
 
-async def stop_producer(producer):
+async def stop_producer(producer: AIOKafkaProducer) -> None:
+    """
+    Останавливает Kafka Producer.
+    Аргументы:
+    - producer: экземпляр Kafka Producer.
+    """
     await producer.stop()
 
 
