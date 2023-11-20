@@ -22,49 +22,56 @@ async def process_message(message):
         if user is None:
             logging.error('В user ID содержится недопустимое значение.')
             return
-        logger.info(f'Получен ответ с пользователем {user}.')
 
-        user_id = user['id']
-        logger.info(f'Извелечен id пользователя: {user_id}.')
+        user_id = user.get('id')  # Обработка случая, когда user - None
+        if user_id is None:
+            logging.error('ID пользователя не найден.')
+            return
+
+        logger.info(f'Извлечен id пользователя: {user_id}.')
+
         friends_ids = await get_user_friends(user_id)
         if friends_ids is None:
             logging.error('В user friends содержится недопустимое значение.')
             return
+
         logger.info(f'Получен список друзей: {friends_ids}.')
 
         all_users = friends_ids + [user_id]
         logger.info(
-            'Создан список друзей пользователей'
-            f' + сам пользователь: {all_users}.')
+            'Создан список друзей пользователей '
+            '+ сам пользователь: %s.', all_users
+            )
+
         producer = await start_producer()
 
         for user in all_users:
             logger.info(f'Получение групп пользователя: {user}.')
             user_groups = await get_user_groups(user)
             logger.info(f'Получен ответ {user_groups}.')
-            if 'error' not in user_groups and user_groups is not None:
-                data = {'user': user,
-                        'groups': user_groups['response']['items']}
-                await send_message_to_kafka(
-                    producer,
-                    kafka_topic_producer,
-                    action='user_groups', data=data)
-                logger.info(f'Отпарлено сообщение {data}.')
+
+            if user_groups is not None and 'error' not in user_groups:
+                data = {
+                    'user': user,
+                    'groups': user_groups['response']['items']
+                    }
             else:
-                data = {'user': user,
-                        'groups': []}
-                await send_message_to_kafka(
-                    producer,
-                    kafka_topic_producer,
-                    action='user_groups', data=data)
-                logger.info(f'Отпарлено сообщение {data}.')
+                data = {'user': user, 'groups': []}
+
+            await send_message_to_kafka(
+                producer,
+                kafka_topic_producer,
+                action='user_groups',
+                data=data)
+            logger.info(f'Отправлено сообщение {data}.')
 
         data = {user_id: friends_ids}
         await send_message_to_kafka(
             producer,
             kafka_topic_producer,
-            action='user_friends', data=data)
-        logger.info(f'Отпарлено сообщение cо списком друзей {data}.')
+            action='user_friends',
+            data=data)
+        logger.info(f'Отправлено сообщение со списком друзей {data}.')
 
     except Exception as e:
         logging.error(f'Ошибка отправки сообщений: {e}.')

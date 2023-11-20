@@ -1,11 +1,13 @@
 import asyncio
 import json
 import logging
-from aiokafka import AIOKafkaConsumer
+from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 from sqlalchemy.future import select
-from config import kafka_bootstrap_servers, kafka_topic, group_id
+from config import (kafka_bootstrap_servers, kafka_topic,
+                    kafka_topic_producer, group_id)
 from models import User, VKUser, VKGroup, user_groups, user_friends
 from database import async_session
+from sqlalchemy.orm import selectinload
 
 
 async def process_message(message):
@@ -21,6 +23,7 @@ async def process_message(message):
 
     elif action == 'user_friends':
         await handle_user_friends(payload)
+        await get_user_info(payload)
 
     else:
         logger.warning('Неизвестное действие: %s', action)
@@ -43,6 +46,7 @@ async def handle_user_friends(data):
         for friend_id in friends:
             friend_user = await get_or_create_user(friend_id)
             await create_user_relation(user, friend_user)
+    logger.info(f'Создание записи для {user_id} окончено.')
 
 
 async def get_or_create_user_with_user_obj(user_id):
@@ -114,6 +118,60 @@ async def create_user_relation(user, friend_user):
         await session.execute(user_friends.insert().values(user_friend_data))
         await session.commit()
 
+    return None
+
+
+async def get_user_info(data):
+    for user_id, friendz in data.items():
+        logger.info(f'Подготовка данных для PDF {user_id}.')
+        user_id = int(user_id)
+        try:
+            async with async_session() as session:
+
+                user_and_friends_query = select(VKUser).options(
+                    selectinload(VKUser.user),
+                    selectinload(VKUser.friends).selectinload(VKUser.groups)
+                ).filter_by(vk_user_id=user_id)
+
+                vk_user = await session.execute(user_and_friends_query)
+                vk_user_info = vk_user.scalars().first()
+
+                friends_info_json = json.dumps(
+                    [
+                        {'id': friend.vk_user_id}
+                        for friend in vk_user_info.friends
+                    ], ensure_ascii=False)
+
+                groups_info_json = json.dumps([
+                    {'name': group.name}
+                    for friend in vk_user_info.friends
+                    for group in friend.groups
+                ], ensure_ascii=False)
+
+                logger.info(f'\nПользователь: {vk_user_info.user.username}.'
+                            f'\nVK id: {user_id}.'
+                            f'\nСписок друзей VK: {friends_info_json}'
+                            f'\nСписок групп друзей VK: {groups_info_json}'
+                            )
+
+                data = {
+                    'username': vk_user_info.user.username,
+                    'vk_user_id': user_id,
+                    'friends_ids': friends_info_json,
+                    'group_names': groups_info_json,
+                    }
+                producer = await start_producer()
+                await send_message_to_kafka(
+                    producer,
+                    kafka_topic_producer,
+                    action='pdf_user_info',
+                    data=data)
+                await stop_producer(producer)
+                logger.info(f'Отправлено сообщение {data}.')
+
+        except Exception as e:
+            logger.error(f'Ошибка сбора данных {e}.')
+
 
 async def consume():
     consumer = AIOKafkaConsumer(
@@ -130,6 +188,23 @@ async def consume():
             await process_message(message)
     finally:
         await consumer.stop()
+
+
+async def start_producer():
+    producer = AIOKafkaProducer(
+        bootstrap_servers=kafka_bootstrap_servers,
+        value_serializer=lambda v: json.dumps(v).encode('utf-8')
+    )
+    await producer.start()
+    return producer
+
+
+async def send_message_to_kafka(producer, topic: str, action: str, data: str):
+    await producer.send(topic, value={"action": action, "data": data})
+
+
+async def stop_producer(producer):
+    await producer.stop()
 
 
 if __name__ == '__main__':

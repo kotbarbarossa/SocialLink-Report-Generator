@@ -40,7 +40,18 @@ services:
       - postgres
     networks:
       - my_network
-    restart: always   
+    restart: always
+
+  pdf_writer_service:
+    build:
+      context: ../pdf_writer_service
+    env_file:
+      - ../pdf_writer_service/.env
+    depends_on:
+      - api_gateway_service
+    networks:
+      - my_network
+    restart: always       
 
   vk_api_service:
     build:
@@ -48,7 +59,7 @@ services:
     env_file:
       - ../vk_api_service/.env
     depends_on:
-      - api_gateway_service
+      - pdf_writer_service
     networks:
       - my_network
     restart: always
