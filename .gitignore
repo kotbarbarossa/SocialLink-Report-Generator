@@ -160,3 +160,5 @@ cython_debug/
 #.idea/
 
 test.py
+.DS_Store
+vk_217109870.pdf
