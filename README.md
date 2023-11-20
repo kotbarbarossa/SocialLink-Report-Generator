@@ -51,18 +51,16 @@ git clone https://github.com/kotbarbarossa/SocialLink-Report-Generator.git
 ####  api_gateway_service
 
 ```plaintext
-
 KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 KAFKA_TOPIC_VK=vk_api_service
 KAFKA_TOPIC_INSTAGRAM=instagram_api_service
 KAFKA_TOPIC_TELEGRAM=telegram_api_service
 KAFKA_GROUP_ID=user_processing_group
-
 ```
 
 ####  database_service
-```plaintext
 
+```plaintext
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_HOST=postgres
@@ -73,21 +71,19 @@ KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 KAFKA_TOPIC_CONSUMER=database_service
 KAFKA_TOPIC_PRODUCER=pdf_writer_service
 KAFKA_GROUP_ID=user_processing_group
-
 ```
 
 ####  pdf_writer_service
-```plaintext
 
+```plaintext
 KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 KAFKA_TOPIC_CONSUMER=pdf_writer_service
 KAFKA_GROUP_ID=user_processing_group
-
 ```
 
 ####  vk_api_service
-```plaintext
 
+```plaintext
 KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 KAFKA_TOPIC_CONSUMER=vk_api_service
 KAFKA_TOPIC_PRODUCER=database_service
@@ -98,8 +94,8 @@ VK_TOKEN="токен"
 ```
 
 ####  infra
-```plaintext
 
+```plaintext
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_HOST=postgres
@@ -118,44 +114,36 @@ KAFKA_CREATE_TOPICS="vk_api_service:1:1"
 Запустите сборку образа командой:
 
 ```bash
-
 docker-compose up -d
 ```
 
 После сборки образа выполните миграции. Зайдите в контейнер:
 
-
-
 ```bash
-
 docker exec -it infra-database_service-1 bash
 ```
 
 Запустите миграции:
 
 ```bash
-
 alembic upgrade head
 ```
 
 Сервис будет доступен по адресу:
 
 ```bash
-
 http://localhost:8000/docs/
 ```
 
 Для создания отчета отправьте ```POST```-запрос на:
 
 ```bash
-
 /post_user/{social_network}/{username}/
 ```
 
 Используйте параметры:
 
 ```json
-
 {
   "social_network": "vk",
   "username": "username"
@@ -167,8 +155,14 @@ PDF файл будет доступен в контейнере ```infra-pdf_wr
 Для быстрого извлечения файла из контейнера используйте команду:
 
 ```bash
-
-docker cp infra-pdf_writer_service-1:/app/vk_217109870.pdf /tmp/
+docker cp infra-pdf_writer_service-1:/app/имя_файла.pdf /tmp/
 ```
 
 Где ```/tmp/``` - путь к локальной директории.
+
+Посмотреть имя файла можно используя команды:
+
+```bash
+docker exec -it infra-pdf_writer_service-1 bash
+ls
+```
