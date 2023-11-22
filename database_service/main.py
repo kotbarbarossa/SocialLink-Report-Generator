@@ -60,15 +60,15 @@ async def handle_user_friends(data: Dict[str, List[int]]) -> None:
     - data: данные о друзьях пользователя в формате JSON.
     """
     for user_id, friends in data.items():
-        user, user_obj = await get_or_create_user_with_user_obj(int(user_id))
+        vk_user, user = await get_or_create_vk_user_and_user(int(user_id))
 
         for friend_id in friends:
             friend_user = await get_or_create_user(friend_id)
-            await create_user_relation(user, friend_user)
+            await create_user_relation(vk_user, friend_user)
     logger.info(f'Создание записи для {user_id} окончено.')
 
 
-async def get_or_create_user_with_user_obj(
+async def get_or_create_vk_user_and_user(
         user_id: int) -> Tuple[Optional[VKUser], Optional[User]]:
     """
     Получает или создает пользователя VK и связанного с ним пользователя.
@@ -77,26 +77,26 @@ async def get_or_create_user_with_user_obj(
     Возвращает кортеж (пользователь VK, связанный пользователь).
     """
     async with async_session() as session:
-        user = await session.execute(
+        vk_user = await session.execute(
             select(VKUser).filter_by(vk_user_id=user_id))
+        vk_user = vk_user.scalar_one_or_none()
+        user = None
+
+        if not vk_user:
+            vk_user = VKUser(vk_user_id=user_id)
+            session.add(vk_user)
+            await session.commit()
+
+        user = await session.execute(
+            select(User).filter_by(vk_user=vk_user))
         user = user.scalar_one_or_none()
-        user_obj = None
 
         if not user:
-            user = VKUser(vk_user_id=user_id)
+            user = User(username=f"vk_{user_id}", vk_user=vk_user)
             session.add(user)
             await session.commit()
 
-        user_obj = await session.execute(
-            select(User).filter_by(vk_user=user))
-        user_obj = user_obj.scalar_one_or_none()
-
-        if not user_obj:
-            user_obj = User(username=f"vk_{user_id}", vk_user=user)
-            session.add(user_obj)
-            await session.commit()
-
-    return user, user_obj
+    return vk_user, user
 
 
 async def get_or_create_user(user_id: int) -> Optional[VKUser]:
