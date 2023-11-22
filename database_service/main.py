@@ -60,15 +60,16 @@ async def handle_user_friends(data: Dict[str, List[int]]) -> None:
     Аргументы:
     - data: данные о друзьях пользователя в формате JSON.
     """
-    for user_id, friends in data.items():
-        username = f'vk_{user_id}'
-        vk_user, user = await get_or_create_vk_user_and_user(
-            int(user_id),
-            username)
+    user_id = data.get('user_id')
+    name = data.get('name')
+    friends_ids = data.get('friends_ids')
+    vk_user, user = await get_or_create_vk_user_and_user(
+        user_id,
+        name)
 
-        for friend_id in friends:
-            friend_user = await get_or_create_user(friend_id)
-            await create_user_relation(vk_user, friend_user)
+    for friend_id in friends_ids:
+        friend_user = await get_or_create_user(friend_id)
+        await create_user_relation(vk_user, friend_user)
     logger.info(f'Создание записи для {user_id} окончено.')
 
 
@@ -194,55 +195,56 @@ async def get_user_info(data: Dict[str, Any]) -> None:
     Аргументы:
     - data: данные о пользователе VK в формате JSON.
     """
-    for user_id, friendz in data.items():
-        logger.info(f'Подготовка данных для PDF {user_id}.')
-        user_id = int(user_id)
-        try:
-            async with async_session() as session:
+    user_id = data.get('user_id')
+    name = data.get('name')
 
-                user_and_friends_query = select(VKUser).options(
-                    selectinload(VKUser.user),
-                    selectinload(VKUser.friends).selectinload(VKUser.groups)
-                ).filter_by(vk_user_id=user_id)
+    logger.info(f'Подготовка данных для PDF {name}.')
+    try:
+        async with async_session() as session:
 
-                vk_user = await session.execute(user_and_friends_query)
-                vk_user_info = vk_user.scalars().first()
+            user_and_friends_query = select(VKUser).options(
+                selectinload(VKUser.user),
+                selectinload(VKUser.friends).selectinload(VKUser.groups)
+            ).filter_by(vk_user_id=user_id)
 
-                friends_info_json = json.dumps(
-                    [
-                        {'id': friend.vk_user_id}
-                        for friend in vk_user_info.friends
-                    ], ensure_ascii=False)
+            vk_user = await session.execute(user_and_friends_query)
+            vk_user_info = vk_user.scalars().first()
 
-                groups_info_json = json.dumps([
-                    {'name': group.name}
+            friends_info_json = json.dumps(
+                [
+                    {'id': friend.vk_user_id}
                     for friend in vk_user_info.friends
-                    for group in friend.groups
                 ], ensure_ascii=False)
 
-                logger.info(f'\nПользователь: {vk_user_info.user.username}.'
-                            f'\nVK id: {user_id}.'
-                            f'\nСписок друзей VK: {friends_info_json}'
-                            f'\nСписок групп друзей VK: {groups_info_json}'
-                            )
+            groups_info_json = json.dumps([
+                {'name': group.name}
+                for friend in vk_user_info.friends
+                for group in friend.groups
+            ], ensure_ascii=False)
 
-                data = {
-                    'username': vk_user_info.user.username,
-                    'vk_user_id': user_id,
-                    'friends_ids': friends_info_json,
-                    'group_names': groups_info_json,
-                    }
-                producer = await start_producer()
-                await send_message_to_kafka(
-                    producer,
-                    kafka_topic_producer,
-                    action='pdf_user_info',
-                    data=data)
-                await stop_producer(producer)
-                logger.info(f'Отправлено сообщение {data}.')
+            logger.info(f'\nПользователь: {vk_user_info.user.username}.'
+                        f'\nVK id: {user_id}.'
+                        f'\nСписок друзей VK: {friends_info_json}'
+                        f'\nСписок групп друзей VK: {groups_info_json}'
+                        )
 
-        except Exception as e:
-            logger.error(f'Ошибка сбора данных {e}.')
+            data = {
+                'username': vk_user_info.user.username,
+                'vk_user_id': user_id,
+                'friends_ids': friends_info_json,
+                'group_names': groups_info_json,
+                }
+            producer = await start_producer()
+            await send_message_to_kafka(
+                producer,
+                kafka_topic_producer,
+                action='pdf_user_info',
+                data=data)
+            await stop_producer(producer)
+            logger.info(f'Отправлено сообщение {data}.')
+
+    except Exception as e:
+        logger.error(f'Ошибка сбора данных {e}.')
 
 
 async def consume() -> None:

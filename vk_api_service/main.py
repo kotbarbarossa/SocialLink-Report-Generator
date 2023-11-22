@@ -17,15 +17,16 @@ async def process_message(message: Any) -> None:
     и обрабатывает данные, отправляя сообщения в Kafka.
     """
     data = json.loads(message.value)
-    username = data.get('username')
+    name = data.get('name')
+    vk_username = data.get('username')
     logger.info(f'Получены данные {message}.')
 
-    if not username:
+    if not vk_username:
         logging.error('В сообщении отсутствует username.')
         return
 
     try:
-        user = await get_user_id(username)
+        user = await get_user_id(vk_username)
         if user is None:
             logging.error('В user ID содержится недопустимое значение.')
             return
@@ -60,10 +61,15 @@ async def process_message(message: Any) -> None:
             if user_groups is not None and 'error' not in user_groups:
                 data = {
                     'user': user,
+                    'name': name,
                     'groups': user_groups['response']['items']
                     }
             else:
-                data = {'user': user, 'groups': []}
+                data = {
+                    'user': user,
+                    'name': name,
+                    'groups': []
+                    }
 
             await send_message_to_kafka(
                 producer,
@@ -72,7 +78,11 @@ async def process_message(message: Any) -> None:
                 data=data)
             logger.info(f'Отправлено сообщение {data}.')
 
-        data = {user_id: friends_ids}
+        data = {
+            'user_id': user_id,
+            'name': name,
+            'friends_ids': friends_ids
+            }
         await send_message_to_kafka(
             producer,
             kafka_topic_producer,

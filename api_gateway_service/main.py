@@ -27,8 +27,9 @@ app = FastAPI(
 
 class PostUserRequest(BaseModel):
     """Валидация запроса post_user."""
+    name: str = Field(max_length=100)
     social_network: str = Field(max_length=50)
-    username: str = Field(max_length=250)    
+    username: str = Field(max_length=250)
 
     @validator('social_network')
     def validate_social_network(cls, v: str) -> str:
@@ -38,18 +39,24 @@ class PostUserRequest(BaseModel):
         return v.lower()
 
 
-@app.post('/post_user/{social_network}/{username}/', tags=['post_user'])
+@app.post('/post_user/{name}/{social_network}/{username}/', tags=['post_user'])
 async def get_user_info(request: PostUserRequest) -> Union[dict, str]:
     """Функция добавления информации о пользователе."""
-    social_network: str = request.social_network
-    username: str = request.username
+    name = request.name
+    social_network = request.social_network
+    username = request.username
 
-    producer: AIOKafkaProducer = await start_producer()
-    await send_message_to_kafka(producer, TOPIC[social_network], username)
+    data = {
+        'username': username,
+        'name': name
+    }
+
+    producer = await start_producer()
+    await send_message_to_kafka(producer, TOPIC[social_network], data)
     await stop_producer(producer)
-    logger.info(f'Отправлено сообщение {username}.')
+    logger.info(f'Отправлено сообщение {data}.')
 
-    return {'message': f'{social_network} - {username} added.'}
+    return {'message': f'Added {social_network} - {username} for {name}.'}
 
 
 async def start_producer() -> AIOKafkaProducer:
@@ -67,7 +74,7 @@ async def start_producer() -> AIOKafkaProducer:
 async def send_message_to_kafka(
         producer: AIOKafkaProducer,
         topic: str,
-        username: str) -> None:
+        data: dict) -> None:
     """
     Отправляет сообщение в Kafka.
     Аргументы:
@@ -76,7 +83,7 @@ async def send_message_to_kafka(
     - action: действие для сообщения.
     - data: данные сообщения.
     """
-    await producer.send(topic, value={"username": username})
+    await producer.send(topic, value=data)
 
 
 async def stop_producer(producer: AIOKafkaProducer) -> None:
@@ -96,6 +103,6 @@ if __name__ == '__main__':
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     file_handler = logging.FileHandler('api_gateway_service.log')
     file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)    
+    logger.addHandler(file_handler)
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

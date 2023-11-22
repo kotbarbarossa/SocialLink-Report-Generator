@@ -145,6 +145,7 @@ http://localhost:8000/docs/
 
 ```json
 {
+  "name": "Дядя Вася",
   "social_network": "vk",
   "username": "username"
 }
