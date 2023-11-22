@@ -9,6 +9,7 @@ from config import (kafka_bootstrap_servers, kafka_topic_consumer,
 from models import User, VKUser, VKGroup, user_groups, user_friends
 from database import async_session
 from sqlalchemy.orm import selectinload
+from sqlalchemy import and_
 
 
 async def process_message(message: Any) -> None:
@@ -156,13 +157,27 @@ async def create_user_relation(user: VKUser, friend_user: VKUser) -> None:
     - user: объект пользователя VK.
     - friend_user: объект другого пользователя VK.
     """
-    user_friend_data = {
-        'vk_user_id': user.id,
-        'friend_vk_user_id': friend_user.id}
+    user_id = user.id
+    friend_user_id = friend_user.id
 
     async with async_session() as session:
-        await session.execute(user_friends.insert().values(user_friend_data))
-        await session.commit()
+        existing_relation = await session.execute(
+            select(user_friends).filter(
+                and_(
+                    user_friends.c.vk_user_id == user_id,
+                    user_friends.c.friend_vk_user_id == friend_user_id
+                )
+            )
+        )
+        existing_relation = existing_relation.scalar_one_or_none()
+
+        if not existing_relation:
+            user_friend_data = {
+                'vk_user_id': user_id,
+                'friend_vk_user_id': friend_user_id
+            }
+            await session.execute(user_friends.insert().values(user_friend_data))
+            await session.commit()
 
     return None
 
