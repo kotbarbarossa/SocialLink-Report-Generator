@@ -1,15 +1,18 @@
-version: '3' 
+version: '3'
 
 services:
 
   zookeeper:
+    container_name: zookeeper_service
     image: arm64v8/zookeeper:latest
     ports:
       - "2181:2181"
     networks:
       - my_network
+    restart: always
 
   kafka:
+    container_name: kafka_service
     image: wurstmeister/kafka:latest
     env_file:
       - ./.env
@@ -19,8 +22,12 @@ services:
       - zookeeper
     networks:
       - my_network
+    restart: always
+    volumes:
+      - kafka_data:/var/lib/kafka/data
 
   postgres:
+    container_name: postgres_service
     image: postgres:13.0-alpine
     env_file:
       - ./.env
@@ -28,8 +35,12 @@ services:
       - kafka
     networks:
       - my_network
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   api_gateway_service:
+    container_name: api_gateway_service
     build:
       context: ../api_gateway_service
     ports:
@@ -43,6 +54,7 @@ services:
     restart: always
 
   pdf_writer_service:
+    container_name: pdf_writer_service
     build:
       context: ../pdf_writer_service
     env_file:
@@ -51,9 +63,12 @@ services:
       - api_gateway_service
     networks:
       - my_network
-    restart: always       
+    restart: always
+    volumes:
+      - pdf_output:/app/output
 
   vk_api_service:
+    container_name: vk_api_service
     build:
       context: ../vk_api_service
     env_file:
@@ -65,6 +80,7 @@ services:
     restart: always
 
   database_service:
+    container_name: database_service
     build:
       context: ../database_service
     env_file:
@@ -77,3 +93,8 @@ services:
 
 networks:
   my_network:
+
+volumes:
+  kafka_data:
+  postgres_data:
+  pdf_output:

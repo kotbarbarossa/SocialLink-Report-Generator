@@ -108,7 +108,7 @@ KAFKA_LISTENER_SECURITY_PROTOCOL_MAP='INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT'
 KAFKA_LISTENERS='INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9092'
 KAFKA_INTER_BROKER_LISTENER_NAME='INSIDE'
 KAFKA_ZOOKEEPER_CONNECT='zookeeper:2181'
-KAFKA_CREATE_TOPICS="vk_api_service:1:1"
+KAFKA_CREATE_TOPICS="vk_api_service:1:1,database_service:1:1,pdf_writer_service:1:1"
 ```
 
 Запустите сборку образа командой:
@@ -120,7 +120,7 @@ docker-compose up -d
 После сборки образа выполните миграции. Зайдите в контейнер:
 
 ```bash
-docker exec -it infra-database_service-1 bash
+docker exec -it database_service bash
 ```
 
 Запустите миграции:
@@ -138,7 +138,7 @@ http://localhost:8000/docs/
 Для создания отчета отправьте ```POST```-запрос на:
 
 ```bash
-/post_user/{social_network}/{username}/
+/post_user/{name}/{social_network}/{username}/
 ```
 
 Используйте параметры:
@@ -151,12 +151,12 @@ http://localhost:8000/docs/
 }
 ```
 
-PDF файл будет доступен в контейнере ```infra-pdf_writer_service-1```
+PDF файл будет доступен в контейнере ```pdf_writer_service```
 
 Для быстрого извлечения файла из контейнера используйте команду:
 
 ```bash
-docker cp infra-pdf_writer_service-1:/app/имя_файла.pdf /tmp/
+docker cp pdf_writer_service:/app/имя_файла.pdf /tmp/
 ```
 
 Где ```/tmp/``` - путь к локальной директории.
@@ -164,6 +164,6 @@ docker cp infra-pdf_writer_service-1:/app/имя_файла.pdf /tmp/
 Посмотреть имя файла можно используя команды:
 
 ```bash
-docker exec -it infra-pdf_writer_service-1 bash
+docker exec -it pdf_writer_service bash
 ls
 ```
