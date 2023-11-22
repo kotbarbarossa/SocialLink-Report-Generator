@@ -61,7 +61,10 @@ async def handle_user_friends(data: Dict[str, List[int]]) -> None:
     - data: данные о друзьях пользователя в формате JSON.
     """
     for user_id, friends in data.items():
-        vk_user, user = await get_or_create_vk_user_and_user(int(user_id))
+        username = f'vk_{user_id}'
+        vk_user, user = await get_or_create_vk_user_and_user(
+            int(user_id),
+            username)
 
         for friend_id in friends:
             friend_user = await get_or_create_user(friend_id)
@@ -70,18 +73,12 @@ async def handle_user_friends(data: Dict[str, List[int]]) -> None:
 
 
 async def get_or_create_vk_user_and_user(
-        user_id: int) -> Tuple[Optional[VKUser], Optional[User]]:
-    """
-    Получает или создает пользователя VK и связанного с ним пользователя.
-    Аргументы:
-    - user_id: идентификатор пользователя VK.
-    Возвращает кортеж (пользователь VK, связанный пользователь).
-    """
+        user_id: int,
+        username: str) -> Tuple[Optional[VKUser], Optional[User]]:
     async with async_session() as session:
         vk_user = await session.execute(
             select(VKUser).filter_by(vk_user_id=user_id))
         vk_user = vk_user.scalar_one_or_none()
-        user = None
 
         if not vk_user:
             vk_user = VKUser(vk_user_id=user_id)
@@ -93,9 +90,17 @@ async def get_or_create_vk_user_and_user(
         user = user.scalar_one_or_none()
 
         if not user:
-            user = User(username=f"vk_{user_id}", vk_user=vk_user)
-            session.add(user)
-            await session.commit()
+            user = await session.execute(
+                select(User).filter_by(username=username))
+            user = user.scalar_one_or_none()
+            if not user:
+                user = User(username=username, vk_user=vk_user)
+                session.add(user)
+                await session.commit()
+            else:
+                user.vk_user = vk_user
+                session.add(user)
+                await session.commit()
 
     return vk_user, user
 
@@ -176,7 +181,8 @@ async def create_user_relation(user: VKUser, friend_user: VKUser) -> None:
                 'vk_user_id': user_id,
                 'friend_vk_user_id': friend_user_id
             }
-            await session.execute(user_friends.insert().values(user_friend_data))
+            await session.execute(
+                user_friends.insert().values(user_friend_data))
             await session.commit()
 
     return None
